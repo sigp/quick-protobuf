@@ -555,7 +555,7 @@ impl BytesReader {
         // Meant to prevent overflowing. Comparison used is *strictly* lesser
         // since `self.end` is given by `len()`; i.e. `self.end` is 1 more than
         // highest index
-        if self.end - self.start < offset {
+        if self.end.checked_sub(self.start).ok_or(Error::Varint)? < offset {
             Err(Error::Varint)
         } else {
             self.start += offset;
