@@ -112,8 +112,11 @@ impl BytesReader {
     /// Reads the next byte
     #[cfg_attr(feature = "std", inline(always))]
     pub fn read_u8(&mut self, bytes: &[u8]) -> Result<u8> {
+        if self.start >= self.end {
+            return Err(Error::UnexpectedEndOfBuffer);
+        }
         let b = bytes.get(self.start).ok_or(Error::UnexpectedEndOfBuffer)?;
-        self.start += 1;
+        self.start = self.start.checked_add(1).ok_or(Error::ArithmeticOverflow)?;
         Ok(*b)
     }
 
@@ -333,12 +336,22 @@ impl BytesReader {
     /// Reads fixed64 (little endian u64)
     #[cfg_attr(feature = "std", inline)]
     fn read_fixed<M, F: Fn(&[u8]) -> M>(&mut self, bytes: &[u8], len: usize, read: F) -> Result<M> {
+        // Ensure length does not overflow
+        let read_end = self
+            .start
+            .checked_add(len)
+            .ok_or(Error::ArithmeticOverflow)?;
+        // Ensure new length does not exceed buffer length or byte length
+        if read_end > self.end {
+            return Err(Error::UnexpectedEndOfBuffer);
+        }
         let v = read(
             bytes
-                .get(self.start..self.start + len)
+                .get(self.start..read_end)
                 .ok_or(Error::UnexpectedEndOfBuffer)?,
         );
-        self.start += len;
+
+        self.start = read_end;
         Ok(v)
     }
 
@@ -406,9 +419,19 @@ impl BytesReader {
     where
         F: FnMut(&mut BytesReader, &'a [u8]) -> Result<M>,
     {
+        // Create a temporary end that is start + len, ensure it is less than the current end
         let cur_end = self.end;
-        self.end = self.start + len;
+        let temp_end = self
+            .start
+            .checked_add(len)
+            .ok_or(Error::ArithmeticOverflow)?;
+        if temp_end > self.end {
+            return Err(Error::UnexpectedEndOfBuffer);
+        }
+        self.end = temp_end;
+        // read the message with adjusted end
         let v = read(self, bytes)?;
+        // update start and restore the end to its original value
         self.start = self.end;
         self.end = cur_end;
         Ok(v)
@@ -462,17 +485,33 @@ impl BytesReader {
     where
         [M]: ToOwned,
     {
-        let len = self.read_varint32(bytes)? as usize;
-        if self.len() < len {
+        let len: usize = self.read_varint32(bytes)? as usize;
+        let new_end = self
+            .start
+            .checked_add(len)
+            .ok_or(Error::ArithmeticOverflow)?;
+        if new_end > self.end {
             return Err(Error::UnexpectedEndOfBuffer);
         }
 
         // Note the floor divide; we rely on this to guarantee
         // correctness in the rest of this function
-        let n = len / ::core::mem::size_of::<M>();
-        let target = &bytes[self.start..self.start + (n * ::core::mem::size_of::<M>())];
+        // TODO: if len % size_of::<M>() != 0, should we return an error instead of silently ignoring the extra bytes?
+        let n = len
+            .checked_div(::core::mem::size_of::<M>())
+            .ok_or(Error::DivisionByZero)?;
+        let end_slice = self
+            .start
+            .checked_add(
+                n.checked_mul(::core::mem::size_of::<M>())
+                    .ok_or(Error::ArithmeticOverflow)?,
+            )
+            .ok_or(Error::ArithmeticOverflow)?;
+        let target = bytes
+            .get(self.start..end_slice)
+            .ok_or(Error::UnexpectedEndOfBuffer)?;
 
-        self.start += len;
+        self.start = new_end;
         Ok(PackedFixed::from(target))
     }
 
@@ -555,10 +594,18 @@ impl BytesReader {
         // Meant to prevent overflowing. Comparison used is *strictly* lesser
         // since `self.end` is given by `len()`; i.e. `self.end` is 1 more than
         // highest index
-        if self.end.checked_sub(self.start).ok_or(Error::Varint)? < offset {
+        if self
+            .end
+            .checked_sub(self.start)
+            .ok_or(Error::ArithmeticOverflow)?
+            < offset
+        {
             Err(Error::Varint)
         } else {
-            self.start += offset;
+            self.start = self
+                .start
+                .checked_add(offset)
+                .ok_or(Error::ArithmeticOverflow)?;
             Ok(())
         }
     }
@@ -567,7 +614,7 @@ impl BytesReader {
     #[cfg_attr(feature = "std", inline(always))]
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
-        self.end - self.start
+        self.end.checked_sub(self.start).unwrap_or(0)
     }
 
     /// Checks if `self.len == 0`
@@ -869,7 +916,7 @@ impl<'a, T: Copy + PartialEq> Iterator for PackedFixedIntoIter<'a, T> {
             None
         } else {
             let res = Some(self.packed_fixed.at(self.index));
-            self.index += 1;
+            self.index = self.index.checked_add(1)?;
             res
         }
     }
@@ -913,7 +960,7 @@ impl<'a, T: Copy + PartialEq> Iterator for PackedFixedRefIter<'a, T> {
             None
         } else {
             let res = Some(self.packed_fixed.at(self.index));
-            self.index += 1;
+            self.index = self.index.checked_add(1)?;
             res
         }
     }
