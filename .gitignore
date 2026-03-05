@@ -67,3 +67,4 @@ quick-protobuf/tests/rust_protobuf/v2/test_nested_package_dir_alt/
 quick-protobuf/tests/rust_protobuf/v3/test_deprecated_lifetime_can_compile.rs
 quick-protobuf/tests/rust_protobuf/v3/test_deprecated_lifetime_pb.rs
 quick-protobuf/tests/rust_protobuf/v3/test_enum_alias.rs
+perftest/src/perftest_data.rs
