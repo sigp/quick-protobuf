@@ -702,7 +702,7 @@ impl Reader {
     /// Creates a new `Reader` out of a file path
     #[cfg(feature = "std")]
     pub fn from_file<P: AsRef<Path>>(src: P) -> Result<Reader> {
-        let len = src.as_ref().metadata().unwrap().len() as usize;
+        let len = src.as_ref().metadata()?.len() as usize;
         let f = File::open(src)?;
         Reader::from_reader(f, len)
     }
