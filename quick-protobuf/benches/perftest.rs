@@ -1,48 +1,49 @@
-#![feature(test)]
-
-extern crate quick_protobuf;
-extern crate test;
-
 mod perftest_data;
 
 use std::borrow::Cow;
 use std::cmp::min;
+use std::hint::black_box;
+use std::time::Instant;
 
 use crate::perftest_data::*;
 
 use quick_protobuf::message::MessageWrite;
 use quick_protobuf::MessageRead;
-use quick_protobuf::{BytesReader, Reader, Writer};
-use test::{black_box, Bencher};
+use quick_protobuf::{BytesReader, PackedFixed, Reader, Writer};
 
-#[bench]
-fn read_file(b: &mut Bencher) {
+fn run_bench(name: &str, iterations: u64, mut f: impl FnMut()) {
+    let start = Instant::now();
+    for _ in 0..iterations {
+        f();
+    }
+    let elapsed = start.elapsed();
+    let ns_per_iter = elapsed.as_nanos() as f64 / iterations as f64;
+    println!("{:<30} {:>12.2} ns/iter", name, ns_per_iter);
+}
+
+fn read_file() {
     let path = format!(
         "{}/benches/perftest_data/perftest_data.pbbin",
         env!("CARGO_MANIFEST_DIR")
     );
-    b.iter(|| {
+    let _ = black_box({
         let mut reader = Reader::from_file(&path).unwrap();
         reader.read(PerftestData::from_reader).unwrap().test1.len()
-    })
+    });
 }
 
 macro_rules! perfbench {
     ($gen:ident, $m:ident, $write:ident, $read:ident) => {
-        #[bench]
-        fn $write(b: &mut Bencher) {
+        fn $write() {
             let v = $gen();
-            b.iter(|| {
-                let mut buf = black_box(Vec::new());
-                let mut w = Writer::new(&mut buf);
-                for i in &v {
-                    i.write_message(&mut w).unwrap();
-                }
-            })
+            let mut buf = black_box(Vec::new());
+            let mut w = Writer::new(&mut buf);
+            for i in &v {
+                i.write_message(&mut w).unwrap();
+            }
         }
 
-        #[bench]
-        fn $read(b: &mut Bencher) {
+        fn $read() {
             let v = $gen();
             let mut buf = Vec::new();
             {
@@ -51,12 +52,10 @@ macro_rules! perfbench {
                     i.write_message(&mut w).unwrap();
                 }
             }
-            b.iter(|| {
-                let mut r = BytesReader::from_bytes(&buf);
-                while !r.is_eof() {
-                    let _ = black_box($m::from_reader(&mut r, &buf).unwrap());
-                }
-            })
+            let mut r = BytesReader::from_bytes(&buf);
+            while !r.is_eof() {
+                let _ = black_box($m::from_reader(&mut r, &buf).unwrap());
+            }
         }
     };
 }
@@ -103,7 +102,7 @@ perfbench!(
 fn generate_repeated_packed_float() -> Vec<TestRepeatedPackedFloat<'static>> {
     (1..40)
         .map(|j| TestRepeatedPackedFloat {
-            values: Cow::Owned((0..100).map(|i| (i * j) as f32).collect()),
+            values: PackedFixed::Owned((0..100).map(|i| (i * j) as f32).collect()),
         })
         .collect()
 }
@@ -181,7 +180,7 @@ fn generate_strings() -> Vec<TestStrings<'static>> {
     let mut s = "hello world from quick-protobuf!!!"
         .split(' ')
         .cycle()
-        .map(|s| Cow::Borrowed(s));
+        .map(Cow::Borrowed);
     (1..100)
         .map(|_| TestStrings {
             s1: s.by_ref().next(),
@@ -268,3 +267,59 @@ fn generate_all() -> Vec<PerftestData<'static>> {
 }
 
 perfbench!(generate_all, PerftestData, write_all, read_all);
+
+fn main() {
+    let iterations = std::env::var("BENCH_ITERS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
+
+    println!("Running quick-protobuf perftest benches ({iterations} iterations each)");
+    run_bench("read_file", iterations, read_file);
+    run_bench("write_test1", iterations, write_test1);
+    run_bench("read_test1", iterations, read_test1);
+    run_bench("write_repeated_bool", iterations, write_repeated_bool);
+    run_bench("read_repeated_bool", iterations, read_repeated_bool);
+    run_bench(
+        "write_repeated_packed_int32",
+        iterations,
+        write_repeated_packed_int32,
+    );
+    run_bench(
+        "read_repeated_packed_int32",
+        iterations,
+        read_repeated_packed_int32,
+    );
+    run_bench(
+        "write_repeated_packed_float",
+        iterations,
+        write_repeated_packed_float,
+    );
+    run_bench(
+        "read_repeated_packed_float",
+        iterations,
+        read_repeated_packed_float,
+    );
+    run_bench(
+        "write_repeated_messages",
+        iterations,
+        write_repeated_messages,
+    );
+    run_bench("read_repeated_messages", iterations, read_repeated_messages);
+    run_bench(
+        "write_optional_messages",
+        iterations,
+        write_optional_messages,
+    );
+    run_bench("read_optional_messages", iterations, read_optional_messages);
+    run_bench("write_strings", iterations, write_strings);
+    run_bench("read_strings", iterations, read_strings);
+    run_bench("write_small_bytes", iterations, write_small_bytes);
+    run_bench("read_small_bytes", iterations, read_small_bytes);
+    run_bench("write_large_bytes", iterations, write_large_bytes);
+    run_bench("read_large_bytes", iterations, read_large_bytes);
+    run_bench("write_map", iterations, write_map);
+    run_bench("read_map", iterations, read_map);
+    run_bench("write_all", iterations, write_all);
+    run_bench("read_all", iterations, read_all);
+}

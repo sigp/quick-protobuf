@@ -2,7 +2,7 @@ error[E0107]: struct takes 0 lifetime arguments but 1 lifetime argument was supp
   --> tests/rust_protobuf/v3/test_deprecated_lifetime_must_compile_error.rs:13:26
    |
 13 |     throw_error_field_1: ThisShouldNotHaveALifetimeParameter<'a>,
-   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^---- help: remove these generics
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^---- help: remove the unnecessary generics
    |                          |
    |                          expected 0 lifetime arguments
    |
@@ -16,7 +16,7 @@ error[E0107]: struct takes 0 lifetime arguments but 1 lifetime argument was supp
   --> tests/rust_protobuf/v3/test_deprecated_lifetime_must_compile_error.rs:14:26
    |
 14 |     throw_error_field_2: ThisShouldntEither<'a>,
-   |                          ^^^^^^^^^^^^^^^^^^---- help: remove these generics
+   |                          ^^^^^^^^^^^^^^^^^^---- help: remove the unnecessary generics
    |                          |
    |                          expected 0 lifetime arguments
    |
@@ -30,7 +30,7 @@ error[E0107]: struct takes 0 lifetime arguments but 1 lifetime argument was supp
   --> tests/rust_protobuf/v3/test_deprecated_lifetime_must_compile_error.rs:15:26
    |
 15 |     throw_error_field_3: NorShouldThis<'a>,
-   |                          ^^^^^^^^^^^^^---- help: remove these generics
+   |                          ^^^^^^^^^^^^^---- help: remove the unnecessary generics
    |                          |
    |                          expected 0 lifetime arguments
    |
@@ -39,3 +39,49 @@ note: struct defined here, with 0 lifetime parameters
    |
    | pub struct NorShouldThis {
    |            ^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+ --> tests/rust_protobuf/v3/./test_deprecated_lifetime_pb.rs
+  |
+  |         let mut msg = Self::default();
+  |             ----^^^
+  |             |
+  |             help: remove this `mut`
+  |
+  = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `w`
+ --> tests/rust_protobuf/v3/./test_deprecated_lifetime_pb.rs
+  |
+  |     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+  |                                               ^ help: if this is intentional, prefix it with an underscore: `_w`
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+ --> tests/rust_protobuf/v3/./test_deprecated_lifetime_pb.rs
+  |
+  |         let mut msg = Self::default();
+  |             ----^^^
+  |             |
+  |             help: remove this `mut`
+
+warning: unused variable: `w`
+ --> tests/rust_protobuf/v3/./test_deprecated_lifetime_pb.rs
+  |
+  |     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+  |                                               ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: variable does not need to be mutable
+ --> tests/rust_protobuf/v3/./test_deprecated_lifetime_pb.rs
+  |
+  |         let mut msg = Self::default();
+  |             ----^^^
+  |             |
+  |             help: remove this `mut`
+
+warning: unused variable: `w`
+ --> tests/rust_protobuf/v3/./test_deprecated_lifetime_pb.rs
+  |
+  |     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+  |                                               ^ help: if this is intentional, prefix it with an underscore: `_w`

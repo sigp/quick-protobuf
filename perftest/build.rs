@@ -1,6 +1,6 @@
 extern crate pb_rs;
 extern crate prost_build;
-extern crate protobuf_codegen_pure;
+extern crate protobuf_codegen;
 
 use pb_rs::types::{Config, FileDescriptor, RpcService};
 use std::io::Write;
@@ -34,10 +34,14 @@ fn generate_rpc_test<W: Write + ?Sized>(
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let rust_pb_out_dir = Path::new(&manifest_dir).join("src/generated_rust");
+    fs::create_dir_all(&rust_pb_out_dir).unwrap();
 
     // protobuf
-    protobuf_codegen_pure::Codegen::new()
-        .out_dir("src")
+    protobuf_codegen::Codegen::new()
+        .pure()
+        .out_dir(&rust_pb_out_dir)
         .inputs(["src/perftest_data.proto"])
         .include("src")
         .run()
@@ -67,10 +71,18 @@ fn main() {
     };
     FileDescriptor::write_proto(&config).unwrap();
 
-    // prost
+    // prost - skip if protoc is not available
     let old = ::std::env::var("OUT_DIR");
     env::set_var("OUT_DIR", ".");
-    prost_build::compile_protos(&["src/perftest_data.proto"], &["src"]).unwrap();
-    let _ = old.map(|val| env::set_var("OUT_DIR", val));
-    fs::rename("perftest_data.rs", "src/perftest_data_prost.rs").unwrap();
+    match prost_build::compile_protos(&["src/perftest_data.proto"], &["src"]) {
+        Ok(_) => {
+            let _ = old.map(|val| env::set_var("OUT_DIR", val));
+            fs::rename("perftest_data.rs", "src/perftest_data_prost.rs").unwrap();
+        }
+        Err(e) => {
+            let _ = old.map(|val| env::set_var("OUT_DIR", val));
+            println!("cargo:warning=prost codegen skipped: {}", e);
+            println!("cargo:warning=Install protoc to enable prost benchmarks");
+        }
+    }
 }

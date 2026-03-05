@@ -1,128 +1,145 @@
-use clap::{crate_authors, crate_description, crate_name, crate_version, values_t, App, Arg};
+use clap::{Arg, ArgAction, Command};
 use pb_rs::{errors::Error, types::FileDescriptor, ConfigBuilder};
 use std::path::{Path, PathBuf};
 
 fn run() -> Result<(), Error> {
-    let matches = App::new(crate_name!())
-        .about(crate_description!())
-        .author(crate_authors!("\n"))
-        .version(crate_version!())
+    let matches = Command::new(env!("CARGO_PKG_NAME"))
+        .about(env!("CARGO_PKG_DESCRIPTION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .version(env!("CARGO_PKG_VERSION"))
         .arg(
-            Arg::with_name("OUTPUT")
+            Arg::new("OUTPUT")
                 .required(false)
                 .long("output")
-                .short("o")
-                .takes_value(true)
-                .help("Generated file name, defaults to INPUT with 'rs' extension, cannot be used with --output_directory")
-                .validator(|x| extension_matches(x, "rs")),
+                .short('o')
+                .value_parser(|x: &str| extension_matches(x, "rs"))
+                .help("Generated file name, defaults to INPUT with 'rs' extension, cannot be used with --output_directory"),
         ).arg(
-            Arg::with_name("OUTPUT_DIR")
+            Arg::new("OUTPUT_DIR")
                 .required(false)
                 .long("output_directory")
-                .short("d")
-                .takes_value(true)
+                .short('d')
                 .help("Output directory of generated code, cannot be used with --output"),
         ).arg(
-            Arg::with_name("INCLUDE_PATH")
+            Arg::new("INCLUDE_PATH")
                 .required(false)
                 .long("include")
-                .short("I")
-                .takes_value(true)
+                .short('I')
+                .action(ArgAction::Append)
                 .help("Path to search for imported protobufs"),
         ).arg(
-            Arg::with_name("SINGLE_MOD")
+            Arg::new("SINGLE_MOD")
                 .required(false)
                 .long("single-mod")
-                .short("s")
+                .short('s')
+                .action(ArgAction::SetTrue)
                 .help("Omit generation of modules for each package when there is only one package"),
         ).arg(
-            Arg::with_name("NO_OUTPUT")
+            Arg::new("NO_OUTPUT")
                 .required(false)
                 .long("no-output")
-                .short("n")
+                .short('n')
+                .action(ArgAction::SetTrue)
                 .help(
                     "Show enums and messages in this .proto file, including those imported. \
                      No code generated",
                 ),
         ).arg(
-            Arg::with_name("INPUT")
-                .multiple(true)
+            Arg::new("INPUT")
+                .action(ArgAction::Append)
                 .required(true)
-                .help("The .proto files used to generate quick-protobuf code")
-                .validator(|x| extension_matches(x, "proto")),
+                .value_parser(|x: &str| extension_matches(x, "proto"))
+                .help("The .proto files used to generate quick-protobuf code"),
         ).arg(
-            Arg::with_name("CYCLE")
+            Arg::new("CYCLE")
                 .long("error-cycle")
-                .short("e")
+                .short('e')
                 .required(false)
+                .action(ArgAction::SetTrue)
                 .help("Error out if recursive messages do not have optional fields"),
         ).arg(
-            Arg::with_name("NO_HEADERS")
+            Arg::new("NO_HEADERS")
                 .long("no-headers")
-                .short("H")
+                .short('H')
                 .required(false)
+                .action(ArgAction::SetTrue)
                 .help("Do not add module comments and module attributes in generated file"),
         ).arg(
-            Arg::with_name("CUSTOM_STRUCT_DERIVE")
+            Arg::new("CUSTOM_STRUCT_DERIVE")
                 .long("custom_struct_derive")
-                .short("C")
+                .short('C')
                 .required(false)
-                .takes_value(true)
                 .help("The comma separated values to add to #[derive(...)] for every struct"),
         ).arg(
-            Arg::with_name("CUSTOM_REPR")
+            Arg::new("CUSTOM_REPR")
                 .long("custom_repr")
-                .short("R")
+                .short('R')
                 .required(false)
-                .takes_value(true)
                 .help("The value to use for the optional #[repr(...)] for every struct"),
         ).arg(
-            Arg::with_name("DONT_USE_COW")
+            Arg::new("DONT_USE_COW")
                 .required(false)
                 .long("dont_use_cow")
-                .short("D")
+                .short('D')
+                .action(ArgAction::SetTrue)
                 .help("Don't use Cow for String and Byte types"),
         ).arg(
-            Arg::with_name("OWNED")
+            Arg::new("OWNED")
                 .long("owned")
                 .required(false)
+                .action(ArgAction::SetTrue)
                 .help("Generate Owned structs when the proto stuct has a lifetime"),
         ).arg(
-            Arg::with_name("NOSTD")
+            Arg::new("NOSTD")
                 .long("nostd")
                 .required(false)
+                .action(ArgAction::SetTrue)
                 .help("Generate no_std compliant code"),
         ).arg(
-            Arg::with_name("HASHBROWN")
+            Arg::new("HASHBROWN")
                 .long("hashbrown")
                 .required(false)
+                .action(ArgAction::SetTrue)
                 .help("Use the hashbrown crate as the HashMap implementation"),
         ).arg(
-            Arg::with_name("GEN_INFO")
+            Arg::new("GEN_INFO")
                 .long("gen-info")
                 .required(false)
+                .action(ArgAction::SetTrue)
                 .help("Generate MessageInfo implementations")
         ).arg(
-            Arg::with_name("ADD_DEPRECATED_FIELDS")
+            Arg::new("ADD_DEPRECATED_FIELDS")
                 .long("add-deprecated-fields")
                 .required(false)
+                .action(ArgAction::SetTrue)
                 .help("Add deprecated fields and mark them as #[deprecated]")
         ).arg(
-            Arg::with_name("GENERATE_GETTERS")
+            Arg::new("GENERATE_GETTERS")
                 .long("generate-getters")
                 .required(false)
+                .action(ArgAction::SetTrue)
                 .help("Generate getters for fields with custom default values.")
         ).get_matches();
 
-    let in_files = path_vec(values_t!(matches, "INPUT", String));
-    let include_paths = path_vec(values_t!(matches, "INCLUDE_PATH", String));
-    let out_file = matches.value_of("OUTPUT").map(PathBuf::from);
-    let out_dir = matches.value_of("OUTPUT_DIR").map(PathBuf::from);
-    let custom_repr = matches.value_of("CUSTOM_REPR").map(|o| o.into());
+    let in_files: Vec<PathBuf> = matches
+        .get_many::<String>("INPUT")
+        .unwrap_or_default()
+        .map(PathBuf::from)
+        .collect();
+    let include_paths: Vec<PathBuf> = matches
+        .get_many::<String>("INCLUDE_PATH")
+        .unwrap_or_default()
+        .map(PathBuf::from)
+        .collect();
+    let out_file = matches.get_one::<String>("OUTPUT").map(PathBuf::from);
+    let out_dir = matches.get_one::<String>("OUTPUT_DIR").map(PathBuf::from);
+    let custom_repr = matches.get_one::<String>("CUSTOM_REPR").map(|o| o.into());
     let custom_struct_derive: Vec<String> = matches
-        .value_of("CUSTOM_STRUCT_DERIVE")
+        .get_one::<String>("CUSTOM_STRUCT_DERIVE")
+        .map(|s| s.as_str())
         .unwrap_or("")
         .split(',')
+        .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
         .collect();
 
@@ -132,26 +149,29 @@ fn run() -> Result<(), Error> {
         out_dir.as_ref(),
         &include_paths,
     )?
-    .single_module(matches.is_present("SINGLE_MOD"))
-    .no_output(matches.is_present("NO_OUTPUT"))
-    .error_cycle(matches.is_present("CYCLE"))
-    .headers(!matches.is_present("NO_HEADERS"))
-    .dont_use_cow(matches.is_present("DONT_USE_COW"))
+    .single_module(matches.get_flag("SINGLE_MOD"))
+    .no_output(matches.get_flag("NO_OUTPUT"))
+    .error_cycle(matches.get_flag("CYCLE"))
+    .headers(!matches.get_flag("NO_HEADERS"))
+    .dont_use_cow(matches.get_flag("DONT_USE_COW"))
     .custom_struct_derive(custom_struct_derive)
-    .nostd(matches.is_present("NOSTD"))
-    .hashbrown(matches.is_present("HASHBROWN"))
-    .gen_info(matches.is_present("GEN_INFO"))
+    .nostd(matches.get_flag("NOSTD"))
+    .hashbrown(matches.get_flag("HASHBROWN"))
+    .gen_info(matches.get_flag("GEN_INFO"))
     .custom_repr(custom_repr)
-    .owned(matches.is_present("OWNED"))
-    .add_deprecated_fields(matches.is_present("ADD_DEPRECATED_FIELDS"))
-    .generate_getters(matches.is_present("GENERATE_GETTERS"));
+    .owned(matches.get_flag("OWNED"))
+    .add_deprecated_fields(matches.get_flag("ADD_DEPRECATED_FIELDS"))
+    .generate_getters(matches.get_flag("GENERATE_GETTERS"));
 
     FileDescriptor::run(&compiler.build())
 }
 
-fn extension_matches<P: AsRef<Path>>(path: P, expected: &str) -> std::result::Result<(), String> {
+fn extension_matches<P: AsRef<Path>>(
+    path: P,
+    expected: &str,
+) -> std::result::Result<String, String> {
     match path.as_ref().extension() {
-        Some(x) if x == expected => Ok(()),
+        Some(x) if x == expected => Ok(path.as_ref().to_string_lossy().into_owned()),
         Some(x) => Err(format!(
             "Expected path with extension '{}', not: '{}'",
             expected,
@@ -159,14 +179,6 @@ fn extension_matches<P: AsRef<Path>>(path: P, expected: &str) -> std::result::Re
         )),
         None => Err(format!("Expected path with extension '{}'", expected)),
     }
-}
-
-fn path_vec(maybe_vec: std::result::Result<Vec<String>, clap::Error>) -> Vec<PathBuf> {
-    maybe_vec
-        .unwrap_or_else(|_| Vec::new())
-        .iter()
-        .map(|s| s.into())
-        .collect()
 }
 
 fn main() {

@@ -1411,7 +1411,7 @@ impl Message {
         if !config.dont_use_cow {
             if messages.iter().any(|m| {
                 m.all_fields()
-                    .any(|f| (f.typ.has_cow() || (f.packed() && f.typ.is_fixed_size())))
+                    .any(|f| f.typ.has_cow() || (f.packed() && f.typ.is_fixed_size()))
             }) {
                 if config.nostd {
                     writeln!(w, "use alloc::borrow::Cow;")?;
@@ -1422,7 +1422,7 @@ impl Message {
         } else if config.nostd
             && messages
                 .iter()
-                .any(|m| m.all_fields().any(|f| (f.typ.has_bytes_and_string())))
+                .any(|m| m.all_fields().any(|f| f.typ.has_bytes_and_string()))
         {
             writeln!(w, "use alloc::borrow::ToOwned;")?;
         }
@@ -2671,7 +2671,7 @@ impl FileDescriptor {
         if !rem.is_empty() {
             return Err(Error::TrailingGarbage(rem.chars().take(50).collect()));
         }
-        for mut m in &mut desc.messages {
+        for m in &mut desc.messages {
             if m.path.as_os_str().is_empty() {
                 m.path = in_file.to_path_buf();
                 if !import_search_path.is_empty() {

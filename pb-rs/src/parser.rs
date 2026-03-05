@@ -15,8 +15,8 @@ use nom::{
     },
     combinator::{map, map_res, opt, recognize, value, verify},
     multi::{many0, many1, separated_list0, separated_list1},
-    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
-    IResult,
+    sequence::{delimited, pair, preceded, separated_pair, terminated},
+    IResult, Parser,
 };
 
 #[derive(Debug, Clone)]
@@ -64,7 +64,8 @@ fn qualifiable_name(input: &str) -> IResult<&str, String> {
             |s: &str| !s.ends_with('.') && !s.contains(".."),
         ),
         std::borrow::ToOwned::to_owned,
-    )(input)
+    )
+    .parse(input)
 }
 
 fn word_ref(input: &str) -> IResult<&str, &str> {
@@ -78,37 +79,40 @@ fn word_ref(input: &str) -> IResult<&str, &str> {
             tag("_"),
         )),
         many0(alt((alphanumeric1, tag("_")))),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn word(input: &str) -> IResult<&str, String> {
-    map(word_ref, |word| word.to_owned())(input)
+    map(word_ref, |word| word.to_owned()).parse(input)
 }
 
 fn hex_integer(input: &str) -> IResult<&str, i32> {
     preceded(
         tag("0x"),
         map_res(hex_digit1, |s: &str| i32::from_str_radix(s, 16)),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn integer(input: &str) -> IResult<&str, i32> {
-    map_res(digit1, |s: &str| s.parse())(input)
+    map_res(digit1, |s: &str| s.parse()).parse(input)
 }
 
 fn comment(input: &str) -> IResult<&str, ()> {
-    value((), pair(tag("//"), not_line_ending))(input)
+    value((), pair(tag("//"), not_line_ending)).parse(input)
 }
 
 fn block_comment(input: &str) -> IResult<&str, ()> {
-    value((), tuple((tag("/*"), take_until("*/"), tag("*/"))))(input)
+    value((), (tag("/*"), take_until("*/"), tag("*/"))).parse(input)
 }
 
 fn string(input: &str) -> IResult<&str, String> {
     map(
         delimited(tag("\""), take_until("\""), tag("\"")),
         |s: &str| s.to_owned(),
-    )(input)
+    )
+    .parse(input)
 }
 
 // word break: multispace or comment
@@ -116,18 +120,20 @@ fn br(input: &str) -> IResult<&str, ()> {
     value(
         (),
         many1(alt((value((), multispace1), comment, block_comment))),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn syntax(input: &str) -> IResult<&str, Syntax> {
     delimited(
-        tuple((tag("syntax"), many0(br), tag("="), many0(br))),
+        (tag("syntax"), many0(br), tag("="), many0(br)),
         alt((
             value(Syntax::Proto2, tag("\"proto2\"")),
             value(Syntax::Proto3, tag("\"proto3\"")),
         )),
         pair(many0(br), tag(";")),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn import(input: &str) -> IResult<&str, PathBuf> {
@@ -135,7 +141,8 @@ fn import(input: &str) -> IResult<&str, PathBuf> {
         pair(tag("import"), many1(br)),
         map(string, PathBuf::from),
         pair(many0(br), tag(";")),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn package(input: &str) -> IResult<&str, String> {
@@ -143,7 +150,8 @@ fn package(input: &str) -> IResult<&str, String> {
         pair(tag("package"), many1(br)),
         qualifiable_name,
         pair(many0(br), tag(";")),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn extensions(input: &str) -> IResult<&str, Extensions> {
@@ -166,14 +174,16 @@ fn extensions(input: &str) -> IResult<&str, Extensions> {
             };
             Extensions { from, to }
         },
-    )(input)
+    )
+    .parse(input)
 }
 
 fn num_range(input: &str) -> IResult<&str, Vec<i32>> {
     map(
-        separated_pair(integer, tuple((many1(br), tag("to"), many1(br))), integer),
+        separated_pair(integer, (many1(br), tag("to"), many1(br)), integer),
         |(from_, to)| (from_..=to).collect(),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn reserved_nums(input: &str) -> IResult<&str, Vec<i32>> {
@@ -181,21 +191,23 @@ fn reserved_nums(input: &str) -> IResult<&str, Vec<i32>> {
         delimited(
             pair(tag("reserved"), many1(br)),
             separated_list1(
-                tuple((many0(br), tag(","), many0(br))),
+                (many0(br), tag(","), many0(br)),
                 alt((num_range, map(integer, |i| vec![i]))),
             ),
             pair(many0(br), tag(";")),
         ),
         |nums| nums.into_iter().flat_map(|v| v.into_iter()).collect(),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn reserved_names(input: &str) -> IResult<&str, Vec<String>> {
     delimited(
         pair(tag("reserved"), many1(br)),
-        separated_list1(tuple((many0(br), tag(","), many0(br))), string),
+        separated_list1((many0(br), tag(","), many0(br)), string),
         pair(many0(br), tag(";")),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn key_val(input: &str) -> IResult<&str, (&str, &str)> {
@@ -207,7 +219,8 @@ fn key_val(input: &str) -> IResult<&str, (&str, &str)> {
             map(take_until("]"), |v: &str| v.trim()),
         ),
         tag("]"),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn frequency(input: &str) -> IResult<&str, ParsingStageFrequencyToken> {
@@ -215,7 +228,8 @@ fn frequency(input: &str) -> IResult<&str, ParsingStageFrequencyToken> {
         value(ParsingStageFrequencyToken::Optional, tag("optional")),
         value(ParsingStageFrequencyToken::Repeated, tag("repeated")),
         value(ParsingStageFrequencyToken::Required, tag("required")),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn field_type(input: &str) -> IResult<&str, FieldType> {
@@ -237,19 +251,21 @@ fn field_type(input: &str) -> IResult<&str, FieldType> {
         value(FieldType::Double, tag("double")),
         map(map_field, |(k, v)| FieldType::Map(Box::new(k), Box::new(v))),
         map(qualifiable_name, FieldType::MessageOrEnum),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn map_field(input: &str) -> IResult<&str, (FieldType, FieldType)> {
     delimited(
-        tuple((tag("map"), many0(br), tag("<"), many0(br))),
+        (tag("map"), many0(br), tag("<"), many0(br)),
         separated_pair(
             field_type,
             delimited(many0(br), tag(","), many0(br)),
             field_type,
         ),
         pair(many0(br), tag(">")),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn default_check<'a>(
@@ -261,11 +277,11 @@ fn default_check<'a>(
         if k == "default" {
             return match (syntax, typ) {
                 (Syntax::Proto2, FieldType::StringCow | FieldType::BytesCow) => {
-                    let remove_compulsory_inverted_commas: IResult<&str, &str> =
-                        alt((
-                            delimited(tag("\""), take_until("\""), tag("\"")),
-                            delimited(tag("\'"), take_until("\'"), tag("\'")),
-                        ))(v);
+                    let remove_compulsory_inverted_commas: IResult<&str, &str> = alt((
+                        delimited(tag("\""), take_until("\""), tag("\"")),
+                        delimited(tag("\'"), take_until("\'"), tag("\'")),
+                    ))
+                    .parse(v);
                     remove_compulsory_inverted_commas
                         .map(|(_, s)| Some(s.to_owned()))
                         .map_err(|_| "Default value must be wrapped in inverted commas!")
@@ -323,7 +339,7 @@ where
 {
     move |input| -> IResult<&str, Field> {
         map_res(
-            tuple((
+            (
                 opt(terminated(frequency, many1(br))),
                 terminated(field_type, many1(br)),
                 separated_pair(
@@ -332,7 +348,7 @@ where
                     alt((integer, hex_integer)),
                 ),
                 delimited(many0(br), many0(key_val), pair(many0(br), tag(";"))),
-            )),
+            ),
             |(freq, typ, (name, number), key_vals)| {
                 Ok::<Field, &str>(Field {
                     name,
@@ -360,7 +376,8 @@ where
                         .unwrap_or(false),
                 })
             },
-        )(input)
+        )
+        .parse(input)
     }
 }
 
@@ -395,17 +412,18 @@ fn one_of(syntax: Syntax) -> impl FnMut(&str) -> IResult<&str, OneOf> {
                 module: "".to_string(),
                 imported: false,
             },
-        )(input)
+        )
+        .parse(input)
     }
 }
 
 fn rpc_function_declaration(input: &str) -> IResult<&str, RpcFunctionDeclaration> {
     map(
-        tuple((
+        (
             delimited(pair(tag("rpc"), many1(br)), word, many0(br)),
             delimited(pair(tag("("), many0(br)), word, pair(many0(br), tag(")"))),
             delimited(
-                tuple((many1(br), tag("returns"), many0(br), tag("("), many0(br))),
+                (many1(br), tag("returns"), many0(br), tag("("), many0(br)),
                 word,
                 pair(many0(br), tag(")")),
             ),
@@ -423,9 +441,10 @@ fn rpc_function_declaration(input: &str) -> IResult<&str, RpcFunctionDeclaration
                     value((), tag(";")),
                 )),
             ),
-        )),
+        ),
         |(name, arg, ret, _)| RpcFunctionDeclaration { name, arg, ret },
-    )(input)
+    )
+    .parse(input)
 }
 
 fn rpc_service(input: &str) -> IResult<&str, RpcService> {
@@ -442,7 +461,8 @@ fn rpc_service(input: &str) -> IResult<&str, RpcService> {
             service_name,
             functions,
         },
-    )(input)
+    )
+    .parse(input)
 }
 
 fn message_event(syntax: Syntax) -> impl FnMut(&str) -> IResult<&str, MessageEvent> {
@@ -457,7 +477,8 @@ fn message_event(syntax: Syntax) -> impl FnMut(&str) -> IResult<&str, MessageEve
             map(extensions, MessageEvent::Extensions),
             value(MessageEvent::Ignore, option_ignore),
             value(MessageEvent::Ignore, br),
-        ))(input)
+        ))
+        .parse(input)
     }
 }
 
@@ -490,7 +511,8 @@ fn message(syntax: Syntax) -> impl FnMut(&str) -> IResult<&str, Message> {
                 }
                 msg
             },
-        )(input)
+        )
+        .parse(input)
     }
 }
 
@@ -498,7 +520,7 @@ fn enum_field(input: &str) -> IResult<&str, (String, i32)> {
     terminated(
         separated_pair(
             word,
-            tuple((many0(br), tag("="), many0(br))),
+            (many0(br), tag("="), many0(br)),
             alt((hex_integer, integer)),
         ),
         pair(
@@ -508,7 +530,7 @@ fn enum_field(input: &str) -> IResult<&str, (String, i32)> {
                 // fields for now
                 value(
                     (),
-                    tuple((
+                    (
                         tag("["),
                         many0(multispace1),
                         tag("deprecated"),
@@ -518,12 +540,13 @@ fn enum_field(input: &str) -> IResult<&str, (String, i32)> {
                         word,
                         many0(multispace1),
                         tag("]"),
-                    )),
+                    ),
                 ),
             ))),
             tag(";"),
         ),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn enum_event(input: &str) -> IResult<&str, EnumEvent> {
@@ -531,7 +554,8 @@ fn enum_event(input: &str) -> IResult<&str, EnumEvent> {
         map(enum_field, EnumEvent::Field),
         value(EnumEvent::Ignore, option_ignore),
         value(EnumEvent::Ignore, br),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn enumerator(input: &str) -> IResult<&str, Enumerator> {
@@ -555,14 +579,16 @@ fn enumerator(input: &str) -> IResult<&str, Enumerator> {
             }
             Ok::<Enumerator, &str>(enumerator)
         },
-    )(input)
+    )
+    .parse(input)
 }
 
 fn option_ignore(input: &str) -> IResult<&str, ()> {
     value(
         (),
         delimited(pair(tag("option"), many1(br)), take_until(";"), tag(";")),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn extend(syntax: Syntax) -> impl FnMut(&str) -> IResult<&str, Extend> {
@@ -580,14 +606,16 @@ fn extend(syntax: Syntax) -> impl FnMut(&str) -> IResult<&str, Extend> {
                 opt(pair(many0(br), tag(";"))),
             ),
             |(name, fields)| Extend { name, fields },
-        )(input)
+        )
+        .parse(input)
     }
 }
 
 fn scan_syntax(input: &str) -> IResult<&str, Syntax> {
     map_res(separated_list0(many0(anychar), syntax), |v| {
         Ok::<Syntax, &str>(if v.is_empty() { Syntax::Proto2 } else { v[0] })
-    })(input)
+    })
+    .parse(input)
 }
 
 pub fn file_descriptor<'a>(
@@ -625,7 +653,8 @@ pub fn file_descriptor<'a>(
                     }
                     desc
                 },
-            )(input)
+            )
+            .parse(input)
         };
 
     parser(input).map_err(|e: nom::Err<nom::error::Error<&str>>| e.to_owned())
@@ -1118,8 +1147,8 @@ mod test {
         match file_descriptor(msg) {
             ::nom::IResult::Ok((_, descriptor)) => {
                 println!("Services found: {:?}", descriptor.rpc_services);
-                let service = &descriptor.rpc_services.get(0).expect("Service not found!");
-                let func0 = service.functions.get(0).expect("Function 0 not returned!");
+                let service = &descriptor.rpc_services.first().expect("Service not found!");
+                let func0 = service.functions.first().expect("Function 0 not returned!");
                 let func1 = service.functions.get(1).expect("Function 1 not returned!");
                 let func2 = service.functions.get(2).expect("Function 2 not returned!");
                 assert_eq!("RpcService", service.service_name);
