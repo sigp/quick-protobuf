@@ -1102,3 +1102,91 @@ fn test_packed_fixed_eq() {
     assert_ne!(owned, borrowed_reversed);
     assert_ne!(borrowed, borrowed_reversed);
 }
+
+#[test]
+fn read_message_by_len_overflow() {
+    struct Dummy;
+
+    impl<'a> MessageRead<'a> for Dummy {
+        fn from_reader(_: &mut BytesReader, _: &'a [u8]) -> Result<Self> {
+            Ok(Self)
+        }
+    }
+
+    let bytes = [0_u8];
+    let mut r = BytesReader::from_bytes(&bytes);
+    r.read_u8(&bytes).unwrap();
+
+    let e = match r.read_message_by_len::<Dummy>(&bytes, usize::MAX) {
+        Ok(_) => panic!("expected read_message_by_len to fail"),
+        Err(e) => e,
+    };
+    assert!(matches!(e, Error::ArithmeticOverflow), "{:?}", e);
+}
+
+#[test]
+fn read_fixed32_overflow_on_invalid_cursor() {
+    let bytes = [0_u8; 4];
+    let mut r = BytesReader {
+        start: usize::MAX - 3,
+        end: usize::MAX,
+    };
+
+    let e = r.read_fixed32(&bytes).unwrap_err();
+    assert!(matches!(e, Error::ArithmeticOverflow), "{:?}", e);
+}
+
+#[test]
+fn read_unknown_reports_arithmetic_overflow_for_invalid_cursor() {
+    let bytes = [0_u8; 1];
+    let mut r = BytesReader {
+        start: usize::MAX,
+        end: 0,
+    };
+
+    let e = r.read_unknown(&bytes, WIRE_TYPE_FIXED32 as u32).unwrap_err();
+    assert!(matches!(e, Error::ArithmeticOverflow), "{:?}", e);
+}
+
+#[test]
+fn read_packed_fixed_zst_reports_division_by_zero() {
+    let bytes = [1_u8, 42_u8];
+    let mut r = BytesReader::from_bytes(&bytes);
+
+    let e = r.read_packed_fixed::<()>(&bytes).unwrap_err();
+    assert!(matches!(e, Error::DivisionByZero), "{:?}", e);
+}
+
+#[test]
+fn packed_fixed_at_returns_none_for_out_of_range() {
+    let bytes = [1_u8, 0_u8, 0_u8, 0_u8];
+    let pf: PackedFixed<'_, i32> = PackedFixed::Borrowed(&bytes);
+    assert_eq!(pf.at(0), Some(1));
+    assert_eq!(pf.at(1), None);
+
+    let owned: PackedFixed<'_, i32> = vec![10, 20].into();
+    assert_eq!(owned.at(1), Some(20));
+    assert_eq!(owned.at(2), None);
+
+    let ndy: PackedFixed<'_, i32> = PackedFixed::NoDataYet;
+    assert_eq!(ndy.at(0), None);
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn from_file_returns_error_for_missing_path() {
+    let mut p = std::env::temp_dir();
+    p.push(format!(
+        "quick-protobuf-missing-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    let e = match Reader::from_file(&p) {
+        Ok(_) => panic!("expected from_file to fail for a missing path"),
+        Err(e) => e,
+    };
+    assert!(matches!(e, Error::Io(_)), "{:?}", e);
+}
