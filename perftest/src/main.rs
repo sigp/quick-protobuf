@@ -7,16 +7,19 @@ use std::time::Instant;
 
 use bytes::Buf;
 
-use perftest_data::PerftestData;
 use perftest_data_quick::PerftestData as QuickPerftestData;
+use perftest_data_rust::PerftestData;
 
 use prost::Message as ProstMessage;
 use protobuf::Message;
 use quick_protobuf::{BytesReader, MessageRead, MessageWrite, Reader, Writer};
 
-mod perftest_data;
+#[allow(clippy::all)]
 mod perftest_data_prost;
-#[allow(unused_imports)]
+#[allow(clippy::all)]
+#[path = "generated_rust/perftest_data.rs"]
+mod perftest_data_rust;
+#[allow(unused_imports, clippy::all)]
 mod perftest_data_quick {
     include!(concat!(env!("OUT_DIR"), "/perftest_data_quick.rs"));
 }
@@ -407,7 +410,7 @@ impl perftest_data_quick::PerftestService for RpcTest {
 fn test_rpc() {
     use perftest_data_quick::PerftestService;
 
-    let rpc = RpcTest::default();
+    let rpc = RpcTest;
     let arg = perftest_data_quick::Test1::default();
     let _unhandled_its_okay_were_just_testing_here = rpc.test(&arg);
 }
@@ -421,9 +424,9 @@ fn main() {
     let selected = args.get(2).cloned();
 
     let mut runner = TestRunner {
-        selected: selected,
+        selected,
         any_matched: false,
-        data_size: data_size,
+        data_size,
     };
 
     let data = {

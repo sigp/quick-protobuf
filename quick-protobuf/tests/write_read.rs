@@ -21,7 +21,7 @@ macro_rules! write_read_primitive {
                 let mut w = Writer::new(&mut buf);
                 w.$write(v).unwrap();
             }
-            let mut r = BytesReader::from_bytes(&*buf);
+            let mut r = BytesReader::from_bytes(&buf);
             assert_eq!(v, r.$read(&buf).unwrap());
         }
     };
@@ -50,7 +50,7 @@ fn wr_bytes() {
         let mut w = Writer::new(&mut buf);
         w.write_bytes(v).unwrap();
     }
-    let mut r = BytesReader::from_bytes(&*buf);
+    let mut r = BytesReader::from_bytes(&buf);
     assert_eq!(v, r.read_bytes(&buf).unwrap());
 }
 
@@ -205,7 +205,7 @@ impl<'a> MessageWrite for TestMessageBorrow<'a> {
             r.write_with_tag(10, |r| r.write_uint32(*s))?;
         }
         for s in &self.val {
-            r.write_with_tag(18, |r| r.write_string(*s))?;
+            r.write_with_tag(18, |r| r.write_string(s))?;
         }
         Ok(())
     }
@@ -331,7 +331,7 @@ fn wr_map() {
             w.write_map(
                 2 + sizeof_len(k.len()) + sizeof_varint(*v as u64),
                 10,
-                |w| w.write_string(&**k),
+                |w| w.write_string(k),
                 16,
                 |w| w.write_int32(*v),
             )

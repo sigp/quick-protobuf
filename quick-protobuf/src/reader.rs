@@ -3,7 +3,7 @@
 //! There are actually two main *readers*
 //! - a `BytesReader` which parses data from a `&[u8]`
 //! - a `Reader` which is a wrapper on `BytesReader` which has its own buffer. It provides
-//! convenient functions to the user suche as `from_file`
+//!   convenient functions to the user such as `from_file`
 //!
 //! It is advised, for convenience to directly work with a `Reader`.
 

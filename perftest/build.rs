@@ -34,11 +34,14 @@ fn generate_rpc_test<W: Write + ?Sized>(
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let rust_pb_out_dir = Path::new(&manifest_dir).join("src/generated_rust");
+    fs::create_dir_all(&rust_pb_out_dir).unwrap();
 
     // protobuf
     protobuf_codegen::Codegen::new()
         .pure()
-        .out_dir("src")
+        .out_dir(&rust_pb_out_dir)
         .inputs(["src/perftest_data.proto"])
         .include("src")
         .run()
