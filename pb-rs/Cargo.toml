@@ -11,13 +11,13 @@ edition = "2018"
 rust-version = "1.65"
 
 [dependencies]
-nom = "7"
-log = "0.4.4"
-clap = { version = "4", optional = true }
-env_logger = { version = "0.11", optional = true }
+nom = "8.0.0"
+log = "0.4.29"
+clap = { version = "4.5.60", optional = true }
+env_logger = { version = "0.11.9", optional = true }
 
 [dev-dependencies]
-walkdir = "2.3.1"
+walkdir = "2.5.0"
 
 [features]
 default = ["std"]

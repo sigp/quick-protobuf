@@ -8,15 +8,15 @@ edition = "2021"
 rust-version = "1.70"
 
 [dependencies]
-protobuf = "3"
+protobuf = "3.7.2"
 quick-protobuf = { path = "../quick-protobuf" }
-rand = "0.9"
-prost = "0.13"
-bytes = "1"
+rand = "0.10.0"
+prost = "0.14.3"
+bytes = "1.11.1"
 
 [build-dependencies]
-protobuf-codegen = "3"
+protobuf-codegen = "3.7.2"
 pb-rs = { path = "../pb-rs" }
-prost-build = "0.13"
+prost-build = "0.14.3"
 
 [features]

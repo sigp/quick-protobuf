@@ -1,4 +1,4 @@
-use rand::{rngs::SmallRng, Rng, SeedableRng};
+use rand::{rngs::SmallRng, RngExt, SeedableRng};
 use std::default::Default;
 use std::fmt::Debug;
 use std::fs::File;
@@ -16,6 +16,7 @@ use quick_protobuf::{BytesReader, MessageRead, MessageWrite, Reader, Writer};
 
 mod perftest_data;
 mod perftest_data_prost;
+#[allow(unused_imports)]
 mod perftest_data_quick {
     include!(concat!(env!("OUT_DIR"), "/perftest_data_quick.rs"));
 }
@@ -282,7 +283,7 @@ impl TestRunner {
         b
     }
 
-    fn prost_run_test<M: ProstMessage + Clone + Default + PartialEq>(
+    fn prost_run_test<M: ProstMessage + Clone + Default + PartialEq + Debug>(
         &mut self,
         data: &[M],
     ) -> [u128; 4] {
@@ -339,7 +340,7 @@ impl TestRunner {
         c
     }
 
-    fn prost_test<M: ProstMessage + Clone + Default + PartialEq>(
+    fn prost_test<M: ProstMessage + Clone + Default + PartialEq + Debug>(
         &mut self,
         data: &[M],
     ) -> [u128; 4] {
