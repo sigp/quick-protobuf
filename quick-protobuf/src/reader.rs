@@ -618,7 +618,7 @@ impl BytesReader {
     /// Checks if `self.len == 0`
     #[cfg_attr(feature = "std", inline(always))]
     pub fn is_eof(&self) -> bool {
-        self.start == self.end
+        self.start >= self.end
     }
 
     /// Advance inner cursor to the end
