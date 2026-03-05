@@ -30,8 +30,6 @@ pub enum Error {
     ArithmeticOverflow,
     /// The supplied parameters cause division by zero
     DivisionByZero,
-    /// The supplied index is out of range
-    IndexOutOfRange,
 }
 
 /// A wrapper for `Result<T, Error>`
@@ -92,7 +90,6 @@ impl core::fmt::Display for Error {
             Error::OutputBufferTooSmall => write!(f, "Output buffer too small"),
             Error::ArithmeticOverflow => write!(f, "Arithmetic overflow"),
             Error::DivisionByZero => write!(f, "Division by zero"),
-            Error::IndexOutOfRange => write!(f, "Index out of range"),
         }
     }
 }
