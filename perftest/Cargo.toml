@@ -1,4 +1,4 @@
-[project]
+[package]
 name = "perftest"
 version = "0.0.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>",
@@ -8,14 +8,15 @@ edition = "2021"
 rust-version = "1.70"
 
 [dependencies]
-protobuf = "2.25.2"
+protobuf = "3"
 quick-protobuf = { path = "../quick-protobuf" }
-rand = "0.5.5"
-prost = "0.9.0"
+rand = "0.9"
+prost = "0.13"
 bytes = "1"
 
 [build-dependencies]
-protobuf-codegen-pure = "2.25.2"
+protobuf-codegen = "3"
 pb-rs = { path = "../pb-rs" }
-prost-build = "0.9.0"
+prost-build = "0.13"
+
 [features]

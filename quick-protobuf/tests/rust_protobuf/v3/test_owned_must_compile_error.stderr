@@ -10,3 +10,14 @@ error[E0505]: cannot move out of `proto` because it is borrowed
    |          ^^^^^ move out of `proto` occurs here
 18 |     println!("{:?}", owned_copy);
    |                      ---------- borrow later used here
+   |
+note: if `FooOwned` implemented `Clone`, you could clone the value
+  --> tests/rust_protobuf/v3/./test_owned_pb.rs
+   |
+   |             pub struct FooOwned {
+   |             ^^^^^^^^^^^^^^^^^^^ consider implementing `Clone` for this type
+   |
+  ::: tests/rust_protobuf/v3/test_owned_must_compile_error.rs:15:22
+   |
+15 |     let owned_copy = proto.proto().s.to_owned();
+   |                      ----- you could clone this value

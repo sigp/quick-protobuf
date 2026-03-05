@@ -20,8 +20,9 @@ mod perftest_data_quick {
     include!(concat!(env!("OUT_DIR"), "/perftest_data_quick.rs"));
 }
 
-const SEED: [u8; 16] = [
-    10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160,
+const SEED: [u8; 32] = [
+    10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 10, 20, 30, 40, 50, 60,
+    70, 80, 90, 100, 110, 120, 130, 140, 150, 160,
 ];
 
 fn measure<R: Debug + PartialEq, F: FnMut() -> R>(iter: u128, mut f: F, check: Option<&R>) -> u128 {
@@ -40,15 +41,15 @@ struct TestRunner {
 }
 
 impl TestRunner {
-    fn run_test<M: Clone + Message + Default + PartialEq>(&self, data: &[M]) -> [u128; 4] {
+    fn run_test<M: Clone + Message + Default + PartialEq + Debug>(&self, data: &[M]) -> [u128; 4] {
         let mut a = [0; 4];
 
         let mut rng = SmallRng::from_seed(SEED);
         let mut random_data = Vec::new();
 
-        let mut total_size = 0;
-        while total_size < self.data_size {
-            let item = data[rng.gen_range(0, data.len())].clone();
+        let mut total_size: u64 = 0;
+        while total_size < self.data_size as u64 {
+            let item = data[rng.random_range(0..data.len())].clone();
             total_size += item.compute_size();
             random_data.push(item);
         }
@@ -107,7 +108,7 @@ impl TestRunner {
         a
     }
 
-    fn test<M: Message + Clone + Default + PartialEq>(&mut self, data: &[M]) -> [u128; 4] {
+    fn test<M: Message + Clone + Default + PartialEq + Debug>(&mut self, data: &[M]) -> [u128; 4] {
         let a = self.run_test(data);
         self.any_matched = true;
         a
@@ -124,7 +125,7 @@ impl TestRunner {
 
         let mut total_size = 0;
         while total_size < self.data_size {
-            let item = &data[rng.gen_range(0, data.len())];
+            let item = &data[rng.random_range(0..data.len())];
             random_data.push(item.clone());
             total_size += item.get_size() as u32;
         }
@@ -185,7 +186,7 @@ impl TestRunner {
 
         let mut total_size = 0;
         while total_size < self.data_size {
-            let item = &data[rng.gen_range(0, data.len())];
+            let item = &data[rng.random_range(0..data.len())];
             random_data.push(item.clone());
             total_size += item.get_size() as u32;
         }
@@ -237,7 +238,7 @@ impl TestRunner {
 
         let mut total_size = 0;
         while total_size < self.data_size {
-            let item = &data[rng.gen_range(0, data.len())];
+            let item = &data[rng.random_range(0..data.len())];
             random_data.push(item.clone());
             total_size += item.get_size() as u32;
         }
@@ -292,7 +293,7 @@ impl TestRunner {
 
         let mut total_size = 0;
         while total_size < self.data_size {
-            let item = &data[rng.gen_range(0, data.len())];
+            let item = &data[rng.random_range(0..data.len())];
             random_data.push(item.clone());
             total_size += item.encoded_len() as u32;
         }
@@ -442,49 +443,49 @@ fn main() {
 
     let test_data_prost = perftest_data_prost::PerftestData::decode(data.as_slice()).unwrap();
 
-    let a = runner.test(test_data.get_test1());
+    let a = runner.test(&test_data.test1);
     let b = runner.quick_test::<perftest_data_quick::Test1>(&test_data_quick.test1);
     let c = runner.prost_test(&test_data_prost.test1);
     print_results("test1", &a, &b, &c, true);
 
-    let a = runner.test(test_data.get_test_repeated_bool());
+    let a = runner.test(&test_data.test_repeated_bool);
     let b = runner
         .quick_test::<perftest_data_quick::TestRepeatedBool>(&test_data_quick.test_repeated_bool);
     let c = runner.prost_test(&test_data_prost.test_repeated_bool);
     print_results("test_repeated_bool", &a, &b, &c, false);
 
-    let a = runner.test(test_data.get_test_repeated_packed_int32());
+    let a = runner.test(&test_data.test_repeated_packed_int32);
     let b = runner.quick_test::<perftest_data_quick::TestRepeatedPackedInt32>(
         &test_data_quick.test_repeated_packed_int32,
     );
     let c = runner.prost_test(&test_data_prost.test_repeated_packed_int32);
     print_results("test_repeated_packed_int32", &a, &b, &c, false);
 
-    let a = runner.test(test_data.get_test_repeated_messages());
+    let a = runner.test(&test_data.test_repeated_messages);
     let b = runner.quick_test::<perftest_data_quick::TestRepeatedMessages>(
         &test_data_quick.test_repeated_messages,
     );
     let c = runner.prost_test(&test_data_prost.test_repeated_messages);
     print_results("test_repeated_messages", &a, &b, &c, false);
 
-    let a = runner.test(test_data.get_test_optional_messages());
+    let a = runner.test(&test_data.test_optional_messages);
     let b = runner.quick_test::<perftest_data_quick::TestOptionalMessages>(
         &test_data_quick.test_optional_messages,
     );
     let c = runner.prost_test(&test_data_prost.test_optional_messages);
     print_results("test_optional_messages", &a, &b, &c, false);
 
-    let a = runner.test(test_data.get_test_strings());
+    let a = runner.test(&test_data.test_strings);
     let b = runner.quick_run_test_strings(&test_data_quick.test_strings);
     let c = runner.prost_test(&test_data_prost.test_strings);
     print_results("test_strings", &a, &b, &c, false);
 
-    let a = runner.test(test_data.get_test_small_bytearrays());
+    let a = runner.test(&test_data.test_small_bytearrays);
     let b = runner.quick_run_test_bytes(&test_data_quick.test_small_bytearrays);
     let c = runner.prost_test(&test_data_prost.test_small_bytearrays);
     print_results("test_small_bytearrays", &a, &b, &c, false);
 
-    let a = runner.test(test_data.get_test_large_bytearrays());
+    let a = runner.test(&test_data.test_large_bytearrays);
     let b = runner.quick_run_test_bytes(&test_data_quick.test_large_bytearrays);
     let c = runner.prost_test(&test_data_prost.test_large_bytearrays);
     print_results("test_large_bytearrays", &a, &b, &c, false);
