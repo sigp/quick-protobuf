@@ -483,7 +483,7 @@ impl BytesReader {
     where
         [M]: ToOwned,
     {
-        let len: usize = self.read_varint32(bytes)? as usize;
+        let len = self.read_varint32(bytes)? as usize;
         let new_end = self
             .start
             .checked_add(len)
