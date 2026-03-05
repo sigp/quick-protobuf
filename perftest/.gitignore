@@ -4,3 +4,4 @@ mod.rs
 # Auto generated modules for protobuf and prost
 src/perftest_data.rs
 src/perftest_data_prost.rs
+src/generated_rust/

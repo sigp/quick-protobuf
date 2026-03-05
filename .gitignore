@@ -57,3 +57,13 @@ quick-protobuf/tests/rust_protobuf/v2/issue_170_c.rs
 quick-protobuf/tests/rust_protobuf/v2/issue_170_common.rs
 quick-protobuf/tests/rust_protobuf/v2/issue_170_d.rs
 quick-protobuf/tests/rust_protobuf/v2/issue_170_e.rs
+quick-protobuf/tests/rust_protobuf/v2/test_default_values_dont_use_cow.rs
+quick-protobuf/tests/rust_protobuf/v2/test_deprecated_lifetime_can_compile.rs
+quick-protobuf/tests/rust_protobuf/v2/test_deprecated_lifetime_pb.rs
+quick-protobuf/tests/rust_protobuf/v2/test_enum_alias.rs
+quick-protobuf/tests/rust_protobuf/v2/shared0/
+quick-protobuf/tests/rust_protobuf/v2/test_nested_package_dir/
+quick-protobuf/tests/rust_protobuf/v2/test_nested_package_dir_alt/
+quick-protobuf/tests/rust_protobuf/v3/test_deprecated_lifetime_can_compile.rs
+quick-protobuf/tests/rust_protobuf/v3/test_deprecated_lifetime_pb.rs
+quick-protobuf/tests/rust_protobuf/v3/test_enum_alias.rs
