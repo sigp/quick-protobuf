@@ -31,7 +31,7 @@ pub enum Error {
     /// The supplied parameters cause division by zero
     DivisionByZero,
     /// The supplied index is out of range
-    IndexOutOfRange
+    IndexOutOfRange,
 }
 
 /// A wrapper for `Result<T, Error>`

@@ -786,7 +786,10 @@ impl<'a, T: Copy + PartialEq> PackedFixed<'a, T> {
     /// Return the length of the DATA (not the bytes).
     pub fn len(&self) -> usize {
         match self {
-            PackedFixed::Borrowed(bytes) => bytes.len().checked_div(::core::mem::size_of::<T>()).unwrap_or(0),
+            PackedFixed::Borrowed(bytes) => bytes
+                .len()
+                .checked_div(::core::mem::size_of::<T>())
+                .unwrap_or(0),
             PackedFixed::Owned(v) => v.len(),
             PackedFixed::NoDataYet => 0,
         }
