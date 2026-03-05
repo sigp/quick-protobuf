@@ -612,7 +612,7 @@ impl BytesReader {
     #[cfg_attr(feature = "std", inline(always))]
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
-        self.end.checked_sub(self.start).unwrap_or(0)
+        self.end.saturating_sub(self.start)
     }
 
     /// Checks if `self.len == 0`
