@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_mut, unused_variables)]
+
 extern crate quick_protobuf;
 
 mod pb_rs;
