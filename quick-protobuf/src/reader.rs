@@ -786,7 +786,7 @@ impl<'a, T: Copy + PartialEq> PackedFixed<'a, T> {
     /// Return the length of the DATA (not the bytes).
     pub fn len(&self) -> usize {
         match self {
-            PackedFixed::Borrowed(bytes) => bytes.len() / ::core::mem::size_of::<T>(),
+            PackedFixed::Borrowed(bytes) => bytes.len().checked_div(::core::mem::size_of::<T>()).unwrap_or(0),
             PackedFixed::Owned(v) => v.len(),
             PackedFixed::NoDataYet => 0,
         }
@@ -826,22 +826,24 @@ impl<'a, T: Copy + PartialEq> PackedFixed<'a, T> {
     /// Note that `index` refers to the index of the type `T`, and NOT the byte
     /// index. In the case of `Borrowed`, this index is calculated during
     /// runtime, as if the underlying data was already in form `Vec<T>`.
-    pub fn at(&self, index: usize) -> T {
+    pub fn at(&self, index: usize) -> Option<T> {
         match self {
             PackedFixed::Borrowed(bytes) => {
-                let byte_offset = index * core::mem::size_of::<T>();
-                if byte_offset >= bytes.len() {
-                    panic!("PackedFixed::at(): Index out of range!");
+                let size_of_t = core::mem::size_of::<T>();
+                let byte_offset = index.checked_mul(size_of_t)?;
+                let length_less_item = bytes.len().checked_sub(size_of_t)?;
+                if byte_offset > length_less_item {
+                    return None;
                 }
 
                 let mut ptr = bytes.as_ptr();
                 unsafe {
                     ptr = ptr.add(byte_offset);
-                    (ptr as *const T).read_unaligned()
+                    Some((ptr as *const T).read_unaligned())
                 }
             }
-            PackedFixed::Owned(v) => v[index],
-            PackedFixed::NoDataYet => panic!("Cannot call at() on PackedFixed::NoDataYet!"),
+            PackedFixed::Owned(v) => v.get(index).copied(),
+            PackedFixed::NoDataYet => None,
         }
     }
 
@@ -913,7 +915,7 @@ impl<'a, T: Copy + PartialEq> Iterator for PackedFixedIntoIter<'a, T> {
         if self.index >= self.packed_fixed.len() {
             None
         } else {
-            let res = Some(self.packed_fixed.at(self.index));
+            let res = self.packed_fixed.at(self.index);
             self.index = self.index.checked_add(1)?;
             res
         }
@@ -957,7 +959,7 @@ impl<'a, T: Copy + PartialEq> Iterator for PackedFixedRefIter<'a, T> {
         if self.index >= self.packed_fixed.len() {
             None
         } else {
-            let res = Some(self.packed_fixed.at(self.index));
+            let res = self.packed_fixed.at(self.index);
             self.index = self.index.checked_add(1)?;
             res
         }
