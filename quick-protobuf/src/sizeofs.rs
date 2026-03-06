@@ -50,7 +50,7 @@ pub fn sizeof_uint64(v: u64) -> usize {
 
 /// Computes the binary size of the varint encoded sint32
 pub fn sizeof_sint32(v: i32) -> usize {
-    sizeof_varint(((v << 1) ^ (v >> 31)) as u64)
+    sizeof_varint(((v << 1) ^ (v >> 31)) as u32 as u64)
 }
 
 /// Computes the binary size of the varint encoded sint64

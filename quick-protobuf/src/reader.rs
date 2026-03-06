@@ -392,7 +392,7 @@ impl BytesReader {
     /// Reads bool (varint, check if == 0)
     #[cfg_attr(feature = "std", inline)]
     pub fn read_bool(&mut self, bytes: &[u8]) -> Result<bool> {
-        self.read_varint32(bytes).map(|i| i != 0)
+        self.read_varint64(bytes).map(|i| i != 0)
     }
 
     /// Reads enum, encoded as i32
@@ -492,9 +492,10 @@ impl BytesReader {
             return Err(Error::UnexpectedEndOfBuffer);
         }
 
-        // Note the floor divide; we rely on this to guarantee
-        // correctness in the rest of this function
-        // TODO: if len % size_of::<M>() != 0, should we return an error instead of silently ignoring the extra bytes?
+        let elem_size = ::core::mem::size_of::<M>();
+        if elem_size != 0 && len % elem_size != 0 {
+            return Err(Error::UnexpectedEndOfBuffer);
+        }
         let n = len
             .checked_div(::core::mem::size_of::<M>())
             .ok_or(Error::DivisionByZero)?;
@@ -1144,7 +1145,9 @@ fn read_unknown_reports_arithmetic_overflow_for_invalid_cursor() {
         end: 0,
     };
 
-    let e = r.read_unknown(&bytes, WIRE_TYPE_FIXED32 as u32).unwrap_err();
+    let e = r
+        .read_unknown(&bytes, WIRE_TYPE_FIXED32 as u32)
+        .unwrap_err();
     assert!(matches!(e, Error::ArithmeticOverflow), "{:?}", e);
 }
 

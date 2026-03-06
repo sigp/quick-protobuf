@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable, beta]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+      - run: ./run_test.sh
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: ./generate_modules.sh
+      - run: ./conformance/generate.sh
+      - name: Sort generated mod.rs for fmt compliance
+        run: grep -rl 'Automatically generated mod.rs' quick-protobuf/ | xargs -I{} sort -o {} {}
+      - run: cargo fmt -p pb-rs -p quick-protobuf -p conformance -- --check
+
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - run: ./generate_modules.sh
+      - run: cargo bench -p quick-protobuf
+
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install build deps
+        run: sudo apt-get update && sudo apt-get install -y cmake g++
+      - name: Cache conformance runner
+        id: cache-conformance
+        uses: actions/cache@v4
+        with:
+          path: protobuf/build/conformance_test_runner
+          key: conformance-runner-v29.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Build conformance_test_runner
+        if: steps.cache-conformance.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch v29.0 https://github.com/protocolbuffers/protobuf.git protobuf
+          cd protobuf
+          git submodule update --init --depth 1
+          cmake -S . -B build -Dprotobuf_BUILD_CONFORMANCE=ON -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target conformance_test_runner -j$(nproc)
+      - name: Generate conformance proto code
+        run: ./conformance/generate.sh
+      - name: Build testee
+        run: cargo build -p conformance
+      - name: Run conformance tests
+        run: ./protobuf/build/conformance_test_runner --failure_list conformance/failing_tests.txt ./target/debug/conformance

@@ -1,0 +1,95 @@
+# Conformance tests known to fail with quick-protobuf.
+# These are tracked here so CI can still pass while we work on fixes.
+# All failures are codegen/architectural issues in pb-rs, not runtime bugs.
+
+# --- Proto2 ---
+
+# Zero field number acceptance — parser doesn't reject field number 0
+Required.Proto2.ProtobufInput.IllegalZeroFieldNum_Case_0
+Required.Proto2.ProtobufInput.IllegalZeroFieldNum_Case_1
+Required.Proto2.ProtobufInput.IllegalZeroFieldNum_Case_3
+
+# PrematureEof in packed fields — proto2 codegen doesn't generate packed match
+# arms for repeated fields (no tag for length-delimited packed wire format),
+# so packed input is silently dropped via unknown field handler instead of erroring
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.BOOL
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.DOUBLE
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.ENUM
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.FIXED32
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.FIXED64
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.FLOAT
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.INT32
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.INT64
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.SFIXED32
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.SFIXED64
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.SINT32
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.SINT64
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.UINT32
+Required.Proto2.ProtobufInput.PrematureEofInPackedFieldValue.UINT64
+
+# Repeated packed data loss — proto2 codegen only generates unpacked match arm,
+# packed input is silently dropped
+Required.Proto2.ProtobufInput.ValidDataRepeated.BOOL.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.DOUBLE.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.ENUM.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.ENUM.UnpackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.FIXED32.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.FIXED64.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.FLOAT.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.INT32.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.INT64.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.SFIXED32.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.SFIXED64.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.SINT32.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.SINT64.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.UINT32.PackedInput.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataRepeated.UINT64.PackedInput.ProtobufOutput
+
+# Enum round-trip — negative enum values and enum codegen issues
+Required.Proto2.ProtobufInput.ValidDataScalar.ENUM[3].ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataScalar.ENUM[4].ProtobufOutput
+
+# Message merge — requires codegen architectural change (overwrite vs merge)
+Required.Proto2.ProtobufInput.RepeatedScalarMessageMerge.ProtobufOutput
+Required.Proto2.ProtobufInput.ValidDataOneof.MESSAGE.Merge.ProtobufOutput
+
+# Unknown field preservation — quick-protobuf drops unknown fields on round-trip
+Required.Proto2.ProtobufInput.UnknownOrdering.ProtobufOutput
+Required.Proto2.ProtobufInput.UnknownVarint.ProtobufOutput
+
+# --- Proto3 ---
+
+# Zero field number acceptance — parser doesn't reject field number 0
+Required.Proto3.ProtobufInput.IllegalZeroFieldNum_Case_0
+Required.Proto3.ProtobufInput.IllegalZeroFieldNum_Case_1
+Required.Proto3.ProtobufInput.IllegalZeroFieldNum_Case_3
+
+# Repeated unpacked data loss — pb-rs codegen only generates packed match arm
+Required.Proto3.ProtobufInput.ValidDataRepeated.BOOL.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.DOUBLE.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.FIXED32.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.FIXED64.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.FLOAT.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.INT32.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.INT64.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.SFIXED32.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.SFIXED64.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.SINT32.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.SINT64.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.UINT32.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.UINT64.UnpackedInput.ProtobufOutput
+
+# Enum round-trip — negative enum values and enum codegen issues
+Required.Proto3.ProtobufInput.ValidDataRepeated.ENUM.PackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataRepeated.ENUM.UnpackedInput.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataScalar.ENUM[3].ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataScalar.ENUM[4].ProtobufOutput
+
+# Message merge — requires codegen architectural change (overwrite vs merge)
+Required.Proto3.ProtobufInput.RepeatedScalarMessageMerge.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataOneof.MESSAGE.Merge.ProtobufOutput
+Required.Proto3.ProtobufInput.ValidDataMap.STRING.MESSAGE.MergeValue.ProtobufOutput
+
+# Unknown field preservation — quick-protobuf drops unknown fields on round-trip
+Required.Proto3.ProtobufInput.UnknownOrdering.ProtobufOutput
+Required.Proto3.ProtobufInput.UnknownVarint.ProtobufOutput

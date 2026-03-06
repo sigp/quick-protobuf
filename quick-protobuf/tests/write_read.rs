@@ -43,6 +43,28 @@ write_read_primitive!(wr_float, read_float, write_float, 5.8);
 write_read_primitive!(wr_double, read_double, write_double, 5.8);
 
 #[test]
+fn wr_sint32_edge_cases() {
+    for &v in &[0i32, 1, -1, -2, 2, i32::MIN, i32::MAX, i32::MIN + 1] {
+        let mut buf = Vec::new();
+        {
+            let mut w = Writer::new(&mut buf);
+            w.write_sint32(v).unwrap();
+        }
+        // Verify encoding fits in 5 bytes (the max for a 32-bit zigzag varint)
+        assert!(buf.len() <= 5, "sint32 {v} encoded to {} bytes", buf.len());
+        // Verify sizeof matches actual encoded length
+        assert_eq!(
+            buf.len(),
+            sizeof_sint32(v),
+            "sizeof mismatch for sint32 {v}"
+        );
+        // Verify round-trip
+        let mut r = BytesReader::from_bytes(&buf);
+        assert_eq!(v, r.read_sint32(&buf).unwrap(), "round-trip failed for {v}");
+    }
+}
+
+#[test]
 fn wr_bytes() {
     let v = b"test_write_read";
     let mut buf = Vec::new();

@@ -5,4 +5,5 @@ members = [
     "quick-protobuf",
     "pb-rs",
     "perftest",
+    "conformance",
 ]
