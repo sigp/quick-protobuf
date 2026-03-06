@@ -22,8 +22,6 @@ use core::convert::TryFrom;
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 #[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
-#[cfg(not(feature = "std"))]
 use alloc::borrow::ToOwned;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -112,8 +110,11 @@ impl BytesReader {
     /// Reads the next byte
     #[cfg_attr(feature = "std", inline(always))]
     pub fn read_u8(&mut self, bytes: &[u8]) -> Result<u8> {
+        if self.start >= self.end {
+            return Err(Error::UnexpectedEndOfBuffer);
+        }
         let b = bytes.get(self.start).ok_or(Error::UnexpectedEndOfBuffer)?;
-        self.start += 1;
+        self.start = self.start.checked_add(1).ok_or(Error::ArithmeticOverflow)?;
         Ok(*b)
     }
 
@@ -333,12 +334,22 @@ impl BytesReader {
     /// Reads fixed64 (little endian u64)
     #[cfg_attr(feature = "std", inline)]
     fn read_fixed<M, F: Fn(&[u8]) -> M>(&mut self, bytes: &[u8], len: usize, read: F) -> Result<M> {
+        // Ensure length does not overflow
+        let read_end = self
+            .start
+            .checked_add(len)
+            .ok_or(Error::ArithmeticOverflow)?;
+        // Ensure new length does not exceed buffer length or byte length
+        if read_end > self.end {
+            return Err(Error::UnexpectedEndOfBuffer);
+        }
         let v = read(
             bytes
-                .get(self.start..self.start + len)
+                .get(self.start..read_end)
                 .ok_or(Error::UnexpectedEndOfBuffer)?,
         );
-        self.start += len;
+
+        self.start = read_end;
         Ok(v)
     }
 
@@ -406,9 +417,19 @@ impl BytesReader {
     where
         F: FnMut(&mut BytesReader, &'a [u8]) -> Result<M>,
     {
+        // Create a temporary end that is start + len, ensure it is less than the current end
         let cur_end = self.end;
-        self.end = self.start + len;
+        let temp_end = self
+            .start
+            .checked_add(len)
+            .ok_or(Error::ArithmeticOverflow)?;
+        if temp_end > self.end {
+            return Err(Error::UnexpectedEndOfBuffer);
+        }
+        self.end = temp_end;
+        // read the message with adjusted end
         let v = read(self, bytes)?;
+        // update start and restore the end to its original value
         self.start = self.end;
         self.end = cur_end;
         Ok(v)
@@ -463,16 +484,32 @@ impl BytesReader {
         [M]: ToOwned,
     {
         let len = self.read_varint32(bytes)? as usize;
-        if self.len() < len {
+        let new_end = self
+            .start
+            .checked_add(len)
+            .ok_or(Error::ArithmeticOverflow)?;
+        if new_end > self.end {
             return Err(Error::UnexpectedEndOfBuffer);
         }
 
         // Note the floor divide; we rely on this to guarantee
         // correctness in the rest of this function
-        let n = len / ::core::mem::size_of::<M>();
-        let target = &bytes[self.start..self.start + (n * ::core::mem::size_of::<M>())];
+        // TODO: if len % size_of::<M>() != 0, should we return an error instead of silently ignoring the extra bytes?
+        let n = len
+            .checked_div(::core::mem::size_of::<M>())
+            .ok_or(Error::DivisionByZero)?;
+        let end_slice = self
+            .start
+            .checked_add(
+                n.checked_mul(::core::mem::size_of::<M>())
+                    .ok_or(Error::ArithmeticOverflow)?,
+            )
+            .ok_or(Error::ArithmeticOverflow)?;
+        let target = bytes
+            .get(self.start..end_slice)
+            .ok_or(Error::UnexpectedEndOfBuffer)?;
 
-        self.start += len;
+        self.start = new_end;
         Ok(PackedFixed::from(target))
     }
 
@@ -555,10 +592,18 @@ impl BytesReader {
         // Meant to prevent overflowing. Comparison used is *strictly* lesser
         // since `self.end` is given by `len()`; i.e. `self.end` is 1 more than
         // highest index
-        if self.end.checked_sub(self.start).ok_or(Error::Varint)? < offset {
+        if self
+            .end
+            .checked_sub(self.start)
+            .ok_or(Error::ArithmeticOverflow)?
+            < offset
+        {
             Err(Error::Varint)
         } else {
-            self.start += offset;
+            self.start = self
+                .start
+                .checked_add(offset)
+                .ok_or(Error::ArithmeticOverflow)?;
             Ok(())
         }
     }
@@ -567,13 +612,13 @@ impl BytesReader {
     #[cfg_attr(feature = "std", inline(always))]
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
-        self.end - self.start
+        self.end.saturating_sub(self.start)
     }
 
     /// Checks if `self.len == 0`
     #[cfg_attr(feature = "std", inline(always))]
     pub fn is_eof(&self) -> bool {
-        self.start == self.end
+        self.start >= self.end
     }
 
     /// Advance inner cursor to the end
@@ -657,7 +702,7 @@ impl Reader {
     /// Creates a new `Reader` out of a file path
     #[cfg(feature = "std")]
     pub fn from_file<P: AsRef<Path>>(src: P) -> Result<Reader> {
-        let len = src.as_ref().metadata().unwrap().len() as usize;
+        let len = src.as_ref().metadata()?.len() as usize;
         let f = File::open(src)?;
         Reader::from_reader(f, len)
     }
@@ -741,7 +786,10 @@ impl<'a, T: Copy + PartialEq> PackedFixed<'a, T> {
     /// Return the length of the DATA (not the bytes).
     pub fn len(&self) -> usize {
         match self {
-            PackedFixed::Borrowed(bytes) => bytes.len() / ::core::mem::size_of::<T>(),
+            PackedFixed::Borrowed(bytes) => bytes
+                .len()
+                .checked_div(::core::mem::size_of::<T>())
+                .unwrap_or(0),
             PackedFixed::Owned(v) => v.len(),
             PackedFixed::NoDataYet => 0,
         }
@@ -781,22 +829,24 @@ impl<'a, T: Copy + PartialEq> PackedFixed<'a, T> {
     /// Note that `index` refers to the index of the type `T`, and NOT the byte
     /// index. In the case of `Borrowed`, this index is calculated during
     /// runtime, as if the underlying data was already in form `Vec<T>`.
-    pub fn at(&self, index: usize) -> T {
+    pub fn at(&self, index: usize) -> Option<T> {
         match self {
             PackedFixed::Borrowed(bytes) => {
-                let byte_offset = index * core::mem::size_of::<T>();
-                if byte_offset >= bytes.len() {
-                    panic!("PackedFixed::at(): Index out of range!");
+                let size_of_t = core::mem::size_of::<T>();
+                let byte_offset = index.checked_mul(size_of_t)?;
+                let length_less_item = bytes.len().checked_sub(size_of_t)?;
+                if byte_offset > length_less_item {
+                    return None;
                 }
 
                 let mut ptr = bytes.as_ptr();
                 unsafe {
                     ptr = ptr.add(byte_offset);
-                    (ptr as *const T).read_unaligned()
+                    Some((ptr as *const T).read_unaligned())
                 }
             }
-            PackedFixed::Owned(v) => v[index],
-            PackedFixed::NoDataYet => panic!("Cannot call at() on PackedFixed::NoDataYet!"),
+            PackedFixed::Owned(v) => v.get(index).copied(),
+            PackedFixed::NoDataYet => None,
         }
     }
 
@@ -868,8 +918,8 @@ impl<'a, T: Copy + PartialEq> Iterator for PackedFixedIntoIter<'a, T> {
         if self.index >= self.packed_fixed.len() {
             None
         } else {
-            let res = Some(self.packed_fixed.at(self.index));
-            self.index += 1;
+            let res = self.packed_fixed.at(self.index);
+            self.index = self.index.checked_add(1)?;
             res
         }
     }
@@ -912,8 +962,8 @@ impl<'a, T: Copy + PartialEq> Iterator for PackedFixedRefIter<'a, T> {
         if self.index >= self.packed_fixed.len() {
             None
         } else {
-            let res = Some(self.packed_fixed.at(self.index));
-            self.index += 1;
+            let res = self.packed_fixed.at(self.index);
+            self.index = self.index.checked_add(1)?;
             res
         }
     }
@@ -1051,4 +1101,92 @@ fn test_packed_fixed_eq() {
     assert_ne!(owned, owned_reversed);
     assert_ne!(owned, borrowed_reversed);
     assert_ne!(borrowed, borrowed_reversed);
+}
+
+#[test]
+fn read_message_by_len_overflow() {
+    struct Dummy;
+
+    impl<'a> MessageRead<'a> for Dummy {
+        fn from_reader(_: &mut BytesReader, _: &'a [u8]) -> Result<Self> {
+            Ok(Self)
+        }
+    }
+
+    let bytes = [0_u8];
+    let mut r = BytesReader::from_bytes(&bytes);
+    r.read_u8(&bytes).unwrap();
+
+    let e = match r.read_message_by_len::<Dummy>(&bytes, usize::MAX) {
+        Ok(_) => panic!("expected read_message_by_len to fail"),
+        Err(e) => e,
+    };
+    assert!(matches!(e, Error::ArithmeticOverflow), "{:?}", e);
+}
+
+#[test]
+fn read_fixed32_overflow_on_invalid_cursor() {
+    let bytes = [0_u8; 4];
+    let mut r = BytesReader {
+        start: usize::MAX - 3,
+        end: usize::MAX,
+    };
+
+    let e = r.read_fixed32(&bytes).unwrap_err();
+    assert!(matches!(e, Error::ArithmeticOverflow), "{:?}", e);
+}
+
+#[test]
+fn read_unknown_reports_arithmetic_overflow_for_invalid_cursor() {
+    let bytes = [0_u8; 1];
+    let mut r = BytesReader {
+        start: usize::MAX,
+        end: 0,
+    };
+
+    let e = r.read_unknown(&bytes, WIRE_TYPE_FIXED32 as u32).unwrap_err();
+    assert!(matches!(e, Error::ArithmeticOverflow), "{:?}", e);
+}
+
+#[test]
+fn read_packed_fixed_zst_reports_division_by_zero() {
+    let bytes = [1_u8, 42_u8];
+    let mut r = BytesReader::from_bytes(&bytes);
+
+    let e = r.read_packed_fixed::<()>(&bytes).unwrap_err();
+    assert!(matches!(e, Error::DivisionByZero), "{:?}", e);
+}
+
+#[test]
+fn packed_fixed_at_returns_none_for_out_of_range() {
+    let bytes = [1_u8, 0_u8, 0_u8, 0_u8];
+    let pf: PackedFixed<'_, i32> = PackedFixed::Borrowed(&bytes);
+    assert_eq!(pf.at(0), Some(1));
+    assert_eq!(pf.at(1), None);
+
+    let owned: PackedFixed<'_, i32> = vec![10, 20].into();
+    assert_eq!(owned.at(1), Some(20));
+    assert_eq!(owned.at(2), None);
+
+    let ndy: PackedFixed<'_, i32> = PackedFixed::NoDataYet;
+    assert_eq!(ndy.at(0), None);
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn from_file_returns_error_for_missing_path() {
+    let mut p = std::env::temp_dir();
+    p.push(format!(
+        "quick-protobuf-missing-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    let e = match Reader::from_file(&p) {
+        Ok(_) => panic!("expected from_file to fail for a missing path"),
+        Err(e) => e,
+    };
+    assert!(matches!(e, Error::Io(_)), "{:?}", e);
 }
